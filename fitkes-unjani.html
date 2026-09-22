@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -523,7 +523,7 @@
             bottom: 20px;
             right: 20px;
             z-index: 3000;
-            background: rgba(31, 8, 54, 0.85);
+            background: rgba(31, 8, 54, 0.9);
             backdrop-filter: blur(12px);
             border: 1px solid var(--border-glow);
             padding: 10px 16px;
@@ -533,6 +533,8 @@
             align-items: center;
             gap: 12px;
             transition: all 0.3s ease;
+            user-select: none;
+            cursor: pointer;
         }
 
         .music-player-widget:hover {
@@ -769,28 +771,28 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Audio Tag (Direct Link MP3 Google Drive) -->
+    <!-- Audio Tag (Direct Link MP3 Google Drive & Fallback Streams) -->
     <audio id="bgAudio" loop preload="auto">
-        <source src="https://docs.google.com/uc?export=open&id=1uFwE0KOvV7OE1AntaXamK4O_kI96EyA9" type="audio/mpeg">
+        <source src="https://docs.google.com/uc?export=download&id=1uFwE0KOvV7OE1AntaXamK4O_kI96EyA9" type="audio/mpeg">
+        <source src="https://drive.google.com/uc?export=view&id=1uFwE0KOvV7OE1AntaXamK4O_kI96EyA9" type="audio/mpeg">
+        <source src="https://fitkes-apps.github.io/mp3/Rachel%20Platten-Fight%20Song%20(Lyrics).mp3" type="audio/mpeg">
         Browser Anda tidak mendukung elemen audio.
     </audio>
 
     <!-- Floating Music Controls Widget -->
-    <div class="music-player-widget" id="musicWidget">
+    <div class="music-player-widget" id="musicWidget" onclick="handleWidgetClick(event)">
         <div class="music-disc" id="musicDisc">
             <i class="fa-solid fa-music"></i>
         </div>
         <div class="music-info">
-            <span class="music-title">Gathering FITKes</span>
-            <span class="music-subtitle">Musik Latar</span>
+            <span class="music-title" title="Rachel Platten - Fight Song">Fight Song</span>
+            <span class="music-subtitle">Rachel Platten</span>
         </div>
-        <div class="music-controls">
-            <button class="music-btn" id="togglePlayBtn" title="Putar/Jeda Musik" onclick="toggleAudio()">
+        <div class="music-controls" onclick="event.stopPropagation()">
+            <button class="music-btn" id="togglePlayBtn" title="Putar/Jeda Musik" type="button" onclick="toggleAudio(event)">
                 <i class="fa-solid fa-play" id="playIcon"></i>
             </button>
-            <input type="range" class="volume-slider" id="volumeControl" min="0" max="1" step="0.05" value="0.7" title="Pengatur Volume">
+            <input type="range" class="volume-slider" id="volumeControl" min="0" max="1" step="0.05" value="0.7" title="Pengatur Volume" onclick="event.stopPropagation()">
         </div>
     </div>
 
@@ -843,13 +845,20 @@
 
         function playAudio() {
             bgAudio.volume = volumeControl.value;
-            bgAudio.play().then(() => {
-                playIcon.className = 'fa-solid fa-pause';
-                musicDisc.classList.add('playing');
-                audioHasAutoplayed = true;
-            }).catch(err => {
-                console.log("Autoplay dicegah oleh kebijakan browser. Menunggu klik pengguna.");
-            });
+            const playPromise = bgAudio.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    playIcon.className = 'fa-solid fa-pause';
+                    musicDisc.classList.add('playing');
+                    audioHasAutoplayed = true;
+                }).catch(err => {
+                    console.warn("Autoplay / Pemutaran audio dicegah:", err);
+                    playIcon.className = 'fa-solid fa-play';
+                    musicDisc.classList.remove('playing');
+                    showToast('Klik tombol putar untuk memutar musik', 'info');
+                });
+            }
         }
 
         function pauseAudio() {
@@ -858,13 +867,41 @@
             musicDisc.classList.remove('playing');
         }
 
-        function toggleAudio() {
+        function toggleAudio(e) {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
             if (bgAudio.paused) {
                 playAudio();
             } else {
                 pauseAudio();
             }
         }
+
+        function handleWidgetClick(e) {
+            // Jika yang diklik bukan slider volume, lakukan toggle audio
+            if (e.target !== volumeControl) {
+                toggleAudio(e);
+            }
+        }
+
+        // Tangani jika sumber file audio dari Google Drive bermasalah
+        bgAudio.addEventListener('error', (e) => {
+            console.error("Gagal memuat file audio utama, mencoba file cadangan...", e);
+            // Mencoba alternatif source berikutnya
+            const sources = bgAudio.getElementsByTagName('source');
+            if (sources.length > 0) {
+                for (let i = 0; i < sources.length; i++) {
+                    if (sources[i].src !== bgAudio.currentSrc) {
+                        bgAudio.src = sources[i].src;
+                        bgAudio.load();
+                        if (audioHasAutoplayed) playAudio();
+                        break;
+                    }
+                }
+            }
+        });
 
         volumeControl.addEventListener('input', (e) => {
             bgAudio.volume = e.target.value;
